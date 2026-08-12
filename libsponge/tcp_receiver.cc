@@ -11,9 +11,27 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 using namespace std;
 
 void TCPReceiver::segment_received(const TCPSegment &seg) {
-    DUMMY_CODE(seg);
+    const TCPHeader &header = seg.header();
+    //! first segment received, set isn
+    if(header.syn) {
+        _isn = header.seqno;
+        _syn_received = true;
+        if(seg.payload().str().empty() && !header.fin) return ;
+    }
+    //! if syn not set, ignore other segment
+    if(!_syn_received) return ;
+    uint64_t checkpoint = _reassembler.stream_out().bytes_written() + 1;
+    uint64_t abs_seqno = unwrap(header.seqno, _isn.value(), checkpoint);
+    uint64_t stream_index = header.syn ? abs_seqno : abs_seqno - 1; //! consider overflow when abs_seqno equals to 0
+    if(header.fin) _fin_received = true;
+    _reassembler.push_substring(seg.payload().copy(), stream_index, header.fin);
 }
 
-optional<WrappingInt32> TCPReceiver::ackno() const { return {}; }
+optional<WrappingInt32> TCPReceiver::ackno() const {  
+    if(!_syn_received) return nullopt;
+    uint64_t abs_ackno = _reassembler.stream_out().bytes_written() + 1;
+    if(stream_out().input_ended()) abs_ackno += 1;
+    return wrap(abs_ackno, _isn.value());
+}
 
-size_t TCPReceiver::window_size() const { return {}; }
+size_t TCPReceiver::window_size() const { return _capacity - _reassembler.stream_out().buffer_size(); }
