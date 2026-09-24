@@ -34,8 +34,8 @@ uint64_t TCPSender::_window_space() const {
 }
 
 void TCPSender::fill_window() {
-    while (not _fin_sent) {
-        const bool need_syn = not _syn_sent;
+    while (!_fin_sent) {
+        const bool need_syn = ! _syn_sent;
         const uint64_t window_space = _window_space();
         //! The SYN occupies one sequence number of the window, and so does the FIN.
         const uint64_t data_space = need_syn ? (window_space > 0 ? window_space - 1 : 0) : window_space;
@@ -46,9 +46,9 @@ void TCPSender::fill_window() {
         //! false while the data is waiting to be sent. Use input_ended() and check that this segment is the
         //! one that empties the stream. The FIN may only be piggybacked if it also fits in the window
         //! (a FIN consumes one sequence number, so it cannot be added if the window is exactly full).
-        const bool need_fin = _stream.input_ended() and payload_size == _stream.buffer_size() and
+        const bool need_fin = _stream.input_ended() && payload_size == _stream.buffer_size() &&
                               data_space - payload_size > 0;
-        if (not need_syn and payload_size == 0 and not need_fin) {
+        if (! need_syn && payload_size == 0 && ! need_fin) {
             //! The window is full (or closed), or there is simply nothing left to send.
             break;
         }
